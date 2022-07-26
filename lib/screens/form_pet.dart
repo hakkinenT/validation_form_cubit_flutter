@@ -1,8 +1,12 @@
+import 'package:bloc_textfield/common/enum_map.dart';
 import 'package:bloc_textfield/cubit/pet_validation_cubit.dart';
 import 'package:bloc_textfield/data/model/pet.dart';
+import 'package:bloc_textfield/data/model/type_animal.dart';
 import 'package:bloc_textfield/form_validator/form_validator.dart';
+import 'package:bloc_textfield/screens/widgets/drop_down_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
 import '../cubit/pet_cubit.dart';
 
@@ -28,27 +32,36 @@ class PetFormView extends StatefulWidget {
 }
 
 class _PetFormViewState extends State<PetFormView> {
-  final FocusNode _nameFocusNode = FocusNode();
-  final FocusNode _ageFocusNode = FocusNode();
+  final FocusNode _birthdayFocusNode = FocusNode();
 
-  String _appBarTitle = 'Cadastrar Pet';
-  String _textButton = 'Cadastrar Pet';
+  String _textScreen = 'Cadastrar Pet';
 
   @override
   void initState() {
     if (widget.pet != null) {
-      _appBarTitle = 'Editar Pet';
-      _textButton = 'Editar Pet';
+      _textScreen = 'Editar Pet';
       context.read<PetValidationCubit>().updateInputs(widget.pet!);
     }
+
+    ///Valida os campos quando há uma mudança de foco entre eles
+    context.read<PetValidationCubit>().nameInputListener();
+    context.read<PetValidationCubit>().ageInputListener();
+    context.read<PetValidationCubit>().typeAnimalListener();
+
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _birthdayFocusNode.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_appBarTitle),
+        title: Text(_textScreen),
       ),
       body: BlocListener<PetCubit, PetState>(
         listener: (context, state) {
@@ -84,83 +97,197 @@ class _PetFormViewState extends State<PetFormView> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              BlocBuilder<PetValidationCubit, PetValidationState>(
-                builder: (context, state) {
-                  return TextFormField(
-                    key: const ValueKey('textField_namePet'),
-                    initialValue: state.nameInput?.value,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    focusNode: _nameFocusNode,
-                    textInputAction: TextInputAction.next,
-                    onEditingComplete: _ageFocusNode.requestFocus,
-                    onChanged: (name) {
-                      context.read<PetValidationCubit>().nameChanged(name);
-                    },
-                    validator: (value) {
-                      if (state.status == FormStatus.invalid) {
-                        return state.nameInput?.onError;
-                      } else {
-                        return null;
-                      }
-                    },
-                    decoration: const InputDecoration(
-                        hintText: 'Nome', border: OutlineInputBorder()),
-                  );
-                },
-              ),
+              const _NameInput(),
               const SizedBox(
                 height: 16,
               ),
-              BlocBuilder<PetValidationCubit, PetValidationState>(
-                builder: (context, state) {
-                  return TextFormField(
-                    key: const ValueKey('textField_idadePet'),
-                    initialValue: state.ageInput?.value,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    focusNode: _ageFocusNode,
-                    textInputAction: TextInputAction.done,
-                    onChanged: (age) {
-                      context.read<PetValidationCubit>().ageChanged(age);
-                    },
-                    validator: (value) {
-                      if (state.status == FormStatus.invalid) {
-                        return state.ageInput?.onError;
-                      } else {
-                        return null;
-                      }
-                    },
-                    decoration: const InputDecoration(
-                        hintText: 'Idade', border: OutlineInputBorder()),
-                  );
-                },
-              ),
+              const _AgeInput(),
               const SizedBox(
                 height: 16,
               ),
-              BlocBuilder<PetValidationCubit, PetValidationState>(
-                builder: (context, state) {
-                  return SizedBox(
-                    width: MediaQuery.of(context).size.width,
-                    height: 52,
-                    child: ElevatedButton(
-                      child: Text(_textButton),
-                      onPressed: state.status == FormStatus.validated
-                          ? () {
-                              final pet = Pet(
-                                  id: widget.pet?.id,
-                                  name: state.nameInput!.value,
-                                  age: int.parse(state.ageInput!.value));
-                              context.read<PetCubit>().savePet(pet);
-                            }
-                          : null,
-                    ),
-                  );
-                },
+              _TypeAnimalInput(birthdayFocusNode: _birthdayFocusNode),
+              const SizedBox(
+                height: 16,
+              ),
+              _BirthdayInput(birthdayFocusNode: _birthdayFocusNode),
+              const SizedBox(
+                height: 16,
+              ),
+              _PetFormButton(
+                petId: widget.pet?.id,
+                textScreen: _textScreen,
               )
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _NameInput extends StatelessWidget {
+  const _NameInput({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PetValidationCubit, PetValidationState>(
+      builder: (context, state) {
+        return TextFormField(
+          key: const ValueKey('textField_namePet'),
+          autofocus: true,
+          initialValue: state.nameInput?.value,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          focusNode: state.nameFocusNode,
+          textInputAction: TextInputAction.next,
+          onEditingComplete: state.ageFocusNode.requestFocus,
+          onChanged: (name) {
+            context.read<PetValidationCubit>().nameChanged(name);
+          },
+          decoration: InputDecoration(
+              hintText: 'Nome',
+              border: const OutlineInputBorder(),
+              errorText:
+                  state.nameIsNotValidated! ? null : state.nameInput?.onError),
+        );
+      },
+    );
+  }
+}
+
+class _AgeInput extends StatelessWidget {
+  const _AgeInput({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PetValidationCubit, PetValidationState>(
+      builder: (context, state) {
+        return TextFormField(
+          key: const ValueKey('textField_idadePet'),
+          initialValue: state.ageInput?.value,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          focusNode: state.ageFocusNode,
+          onEditingComplete: state.typeAnimalFocusNode.requestFocus,
+          textInputAction: TextInputAction.next,
+          onChanged: (age) {
+            context.read<PetValidationCubit>().ageChanged(age);
+          },
+          decoration: InputDecoration(
+              hintText: 'Idade',
+              border: const OutlineInputBorder(),
+              errorText:
+                  state.ageIsNotValidated! ? null : state.ageInput?.onError),
+        );
+      },
+    );
+  }
+}
+
+class _TypeAnimalInput extends StatelessWidget {
+  final FocusNode birthdayFocusNode;
+  const _TypeAnimalInput({Key? key, required this.birthdayFocusNode})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PetValidationCubit, PetValidationState>(
+        builder: (context, state) {
+      return CustomDropDownButton(
+        key: const ValueKey('dropMenu_type'),
+        hintText: 'Tipo',
+        initialValue: state.typeAnimalInput?.value,
+        focusNode: state.typeAnimalFocusNode,
+        onChanged: (type) {
+          FocusScope.of(context).requestFocus(FocusNode());
+          context.read<PetValidationCubit>().typeAnimalChanged(type);
+          birthdayFocusNode.requestFocus();
+        },
+        errorText: state.typeAnimalIsNotValidated!
+            ? null
+            : state.typeAnimalInput?.onError,
+        width: double.maxFinite,
+      );
+    });
+  }
+}
+
+class _BirthdayInput extends StatelessWidget {
+  final FocusNode birthdayFocusNode;
+  const _BirthdayInput({Key? key, required this.birthdayFocusNode})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PetValidationCubit, PetValidationState>(
+      builder: (context, state) {
+        return TextFormField(
+          key: const ValueKey('textField_birthdayPet'),
+          controller: state.birthday,
+          focusNode: birthdayFocusNode,
+          textInputAction: TextInputAction.done,
+          readOnly: true,
+          decoration: InputDecoration(
+              hintText: 'Data de Nascimento',
+              label: const Text('Data de Nascimento 1 (Opcional)'),
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                  onPressed: () async {
+                    DateTime? pickedDate = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2022),
+                      lastDate: DateTime(2030),
+                    );
+
+                    if (pickedDate != null) {
+                      String formattedDate =
+                          DateFormat('dd/MM/yyyy').format(pickedDate);
+
+                      context
+                          .read<PetValidationCubit>()
+                          .setBirthday(formattedDate);
+                    }
+                  },
+                  icon: const Icon(Icons.calendar_today))),
+        );
+      },
+    );
+  }
+}
+
+class _PetFormButton extends StatelessWidget {
+  final String? petId;
+  final String textScreen;
+  const _PetFormButton(
+      {Key? key, required this.petId, required this.textScreen})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PetValidationCubit, PetValidationState>(
+      builder: (context, state) {
+        return SizedBox(
+          width: MediaQuery.of(context).size.width,
+          height: 52,
+          child: ElevatedButton(
+            child: Text(textScreen),
+            onPressed: state.status == FormStatus.validated
+                ? () {
+                    final pet = Pet(
+                        id: petId,
+                        name: state.nameInput!.value,
+                        age: int.parse(state.ageInput!.value),
+                        birthday: state.birthday?.text == null
+                            ? null
+                            : DateFormat('dd/MM/yyyy')
+                                .parse(state.birthday!.text),
+                        typeAnimal:
+                            stringToTypeAnimal[state.typeAnimalInput!.value]!);
+                    context.read<PetCubit>().savePet(pet);
+                  }
+                : null,
+          ),
+        );
+      },
     );
   }
 }
